@@ -209,10 +209,7 @@
   .pg-title{font-size:12.5px;font-weight:700;color:var(--text);margin-bottom:10px;}
   .pg-swatches{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
   .pg-swatch{aspect-ratio:1;border-radius:8px;border:1px solid rgba(255,255,255,0.08);position:relative;}
-  .pg-swatch .hex{
-    position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:8.5px;
-    color:rgba(255,255,255,.75);mix-blend-mode:difference;
-  }
+  .pg-swatch .hex{display:none;}
   .outfit-note{font-size:13px;color:var(--text-dim);line-height:1.8;border-top:1px solid var(--border);padding-top:14px;}
   .outfit-note b{color:var(--accent3);}
   .outfit-section{margin-bottom:16px;}
@@ -1059,9 +1056,7 @@ function renderPalette(family){
       <div class="pg-title">${g.title}</div>
       <div class="pg-swatches">
         ${g.colors.map(c=>`
-          <div class="pg-swatch" style="background:${c}; cursor:pointer;" onclick="copyHex('${c}')" title="點擊複製 ${c}">
-            <span class="hex">${c}</span>
-          </div>
+          <div class="pg-swatch" style="background:${c}; cursor:pointer;" onclick="copyHex('${c}')" title="點擊複製 ${c}"></div>
         `).join('')}
       </div>
     </div>
