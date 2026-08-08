@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 個人色彩分析報告</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+<style>
+  :root{
+    --bg:#0b0d15;
+    --bg-alt:#10131e;
+    --panel:#151827;
+    --panel-2:#1a1e30;
+    --border:#282d42;
+    --text:#e9eaf3;
+    --text-dim:#9498b0;
+    --text-faint:#666b85;
+    --accent1:#8f7ee8;
+    --accent2:#e78fc4;
+    --accent3:#6fb8db;
+    --gold:#e9c46a;
+    --radius:16px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(circle at 15% 0%, rgba(143,126,232,0.10), transparent 45%),
+      radial-gradient(circle at 85% 10%, rgba(231,143,196,0.08), transparent 40%),
+      var(--bg);
+    color:var(--text);
+    font-family:"Noto Sans TC","Sora",sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding:32px 20px 80px;
+  }
+  .wrap{max-width:1240px;margin:0 auto;}
+  .header{text-align:center;margin-bottom:34px;}
+  .header .eyebrow{
+    font-family:"Sora",sans-serif;
+    letter-spacing:.3em;
+    font-size:11px;
+    color:var(--accent3);
+    text-transform:uppercase;
+    margin-bottom:10px;
+  }
+  .header h1{
+    font-size:clamp(24px,4vw,38px);
+    font-weight:800;
+    margin:0 0 8px;
+    background:linear-gradient(90deg,var(--accent1),var(--accent2));
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+    letter-spacing:.01em;
+  }
+  .header p{color:var(--text-dim);font-size:14px;margin:0;}
+
+  .card{
+    background:linear-gradient(180deg,var(--panel),var(--panel-2));
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:20px;
+  }
+  .card-title{
+    font-family:"Sora",sans-serif;
+    font-size:13px;
+    font-weight:700;
+    letter-spacing:.08em;
+    color:var(--text);
+    display:flex;align-items:center;gap:8px;
+    margin:0 0 16px;
+    padding-bottom:12px;
+    border-bottom:1px solid var(--border);
+  }
+  .card-title .dot{width:6px;height:6px;border-radius:50%;background:var(--accent2);box-shadow:0 0 8px var(--accent2);}
+
+  /* upload */
+  #uploadStage{
+    border:1.5px dashed #3a3f58;
+    border-radius:var(--radius);
+    padding:56px 24px;
+    text-align:center;
+    background:var(--panel);
+    cursor:pointer;
+    transition:border-color .2s, background .2s;
+  }
+  #uploadStage:hover, #uploadStage.drag{border-color:var(--accent1);background:#171a2a;}
+  #uploadStage h2{margin:0 0 6px;font-size:18px;}
+  #uploadStage p{color:var(--text-dim);font-size:13px;margin:4px 0;}
+  #uploadStage .icon{font-size:38px;margin-bottom:14px;}
+  #fileInput{display:none;}
+  .btn{
+    display:inline-block;margin-top:16px;padding:10px 22px;border-radius:999px;
+    background:linear-gradient(90deg,var(--accent1),var(--accent2));
+    color:#0b0d15;font-weight:700;font-size:13px;border:none;cursor:pointer;
+  }
+  .privacy-note{font-size:11.5px;color:var(--text-faint);margin-top:18px;line-height:1.6;}
+
+  #loadingStage{display:none;text-align:center;padding:70px 20px;color:var(--text-dim);}
+  .spinner{
+    width:46px;height:46px;border-radius:50%;
+    border:3px solid #2a2e42;border-top-color:var(--accent2);
+    margin:0 auto 18px;animation:spin 0.9s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  #resultStage{display:none;}
+  .grid-top{
+    display:grid;
+    grid-template-columns:1fr 1.15fr 1fr;
+    gap:18px;
+    margin-bottom:18px;
+  }
+  @media (max-width:920px){.grid-top{grid-template-columns:1fr;}}
+
+  /* skin panel */
+  .swatch-row{display:flex;gap:14px;margin-bottom:14px;}
+  .swatch-crop{
+    width:64px;height:64px;border-radius:10px;flex-shrink:0;
+    background-size:cover;background-position:center;
+    border:1px solid var(--border);
+  }
+  .swatch-info{font-size:12px;color:var(--text-dim);line-height:1.55;}
+  .swatch-info b{color:var(--text);font-size:12.5px;}
+  .mini-bars{display:flex;align-items:flex-end;gap:2px;height:34px;margin-top:6px;}
+  .mini-bars span{width:5px;border-radius:2px 2px 0 0;background:linear-gradient(180deg,var(--accent3),var(--accent1));}
+
+  .precision-label{font-size:12px;color:var(--text-dim);margin:16px 0 8px;}
+  .precision-track{position:relative;height:6px;border-radius:4px;background:#242840;margin-bottom:8px;}
+  .precision-fill{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:linear-gradient(90deg,var(--accent3),var(--accent1),var(--accent2));}
+  .precision-dot{
+    position:absolute;top:50%;width:14px;height:14px;border-radius:50%;
+    background:#fff;transform:translate(-50%,-50%);box-shadow:0 0 0 4px rgba(143,126,232,.35);
+  }
+  .precision-scale{display:flex;justify-content:space-between;font-size:10px;color:var(--text-faint);}
+  .precision-result{font-size:13px;color:var(--accent3);font-weight:700;margin-top:6px;}
+
+  /* center photo */
+  .photo-card{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:20px;}
+  .photo-frame{position:relative;width:100%;max-width:300px;border-radius:12px;overflow:hidden;border:1px solid var(--border);}
+  .photo-frame img{display:block;width:100%;height:auto;}
+  .photo-frame canvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
+  .photo-caption{font-size:11px;color:var(--text-faint);margin-top:12px;text-align:center;line-height:1.6;}
+  .reupload-btn{
+    margin-top:14px;font-size:12px;color:var(--accent3);background:none;border:1px solid var(--border);
+    padding:7px 16px;border-radius:999px;cursor:pointer;
+  }
+
+  /* eye/hair panel */
+  .eyehair-row{display:flex;gap:12px;margin-bottom:14px;}
+  .eh-crop{
+    flex:1;height:74px;border-radius:10px;background-size:cover;background-position:center;
+    border:1px solid var(--border);
+  }
+  .eh-text{font-size:12px;color:var(--text-dim);line-height:1.7;margin-bottom:14px;}
+  .eh-text b{color:var(--text);}
+  .contrast-row{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text-dim);}
+  .chip{width:20px;height:20px;border-radius:5px;border:1px solid rgba(255,255,255,0.15);}
+
+  .radar-wrap{margin-top:6px;}
+  .radar-caption{font-size:11.5px;color:var(--text-faint);text-align:center;margin-top:6px;line-height:1.7;}
+
+  /* result section */
+  .result-card{margin-bottom:18px;}
+  .season-title{
+    display:flex;align-items:center;gap:10px;font-size:19px;font-weight:800;margin:2px 0 18px;
+  }
+  .season-title .en{color:var(--accent2);}
+  .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;}
+  @media (max-width:760px){.stat-grid{grid-template-columns:repeat(2,1fr);}}
+  .stat-box{background:var(--bg-alt);border:1px solid var(--border);border-radius:12px;padding:14px;}
+  .stat-box .label{font-size:11.5px;color:var(--text-dim);margin-bottom:8px;}
+  .stat-box .value{font-size:18px;font-weight:800;color:var(--text);}
+  .stat-box .sub{font-size:11px;color:var(--text-faint);margin-top:2px;}
+  .stat-bar-track{height:5px;border-radius:3px;background:#242840;margin-top:10px;overflow:hidden;}
+  .stat-bar-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--accent3),var(--accent2));}
+  .result-desc{font-size:13.5px;line-height:1.85;color:var(--text-dim);border-top:1px solid var(--border);padding-top:16px;}
+  .result-desc b{color:var(--text);}
+
+  /* celebrity section */
+  .celebrity-box{
+    margin-top:16px;
+    padding:14px 16px;
+    background:rgba(143,126,232,0.06);
+    border:1px solid rgba(143,126,232,0.2);
+    border-radius:12px;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    flex-wrap:wrap;
+  }
+  .celebrity-title{font-size:12.5px;font-weight:700;color:var(--gold);}
+  .celebrity-tags{display:flex;gap:8px;flex-wrap:wrap;}
+  .celebrity-tag{
+    font-size:12px;
+    padding:4px 12px;
+    border-radius:999px;
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    color:var(--text);
+  }
+
+  /* palette section */
+  .palette-groups{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-bottom:22px;}
+  @media (max-width:820px){.palette-groups{grid-template-columns:1fr;}}
+  .pg-title{font-size:12.5px;font-weight:700;color:var(--text);margin-bottom:10px;}
+  .pg-swatches{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+  .pg-swatch{aspect-ratio:1;border-radius:8px;border:1px solid rgba(255,255,255,0.08);position:relative;}
+  .pg-swatch .hex{
+    position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:8.5px;
+    color:rgba(255,255,255,.75);mix-blend-mode:difference;
+  }
+  .outfit-note{font-size:13px;color:var(--text-dim);line-height:1.8;border-top:1px solid var(--border);padding-top:14px;}
+  .outfit-note b{color:var(--accent3);}
+  .outfit-section{margin-bottom:16px;}
+  .outfit-section:last-child{margin-bottom:0;}
+  .outfit-section p{margin:0;font-size:13px;color:var(--text-dim);line-height:1.85;}
+  .outfit-sec-title{margin-bottom:8px;}
+  .tag{
+    display:inline-block;font-size:11.5px;font-weight:700;letter-spacing:.04em;
+    padding:4px 12px;border-radius:999px;color:#0b0d15;
+  }
+  .tag-outfit{background:linear-gradient(90deg,var(--accent1),var(--accent3));}
+  .tag-accessory{background:linear-gradient(90deg,var(--gold),#f0d999);}
+  .tag-makeup{background:linear-gradient(90deg,var(--accent2),#f3b8d8);}
+  .tag-avoid{background:linear-gradient(90deg,#e88f8f,#f0b3b3);}
+  .tag-summary{background:linear-gradient(90deg,var(--accent3),var(--accent1));}
+  .outfit-summary p{color:var(--text);font-weight:500;}
+
+  .footer-note{text-align:center;font-size:11px;color:var(--text-faint);margin-top:30px;line-height:1.8;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <div class="eyebrow">AI VISION · COLOR ANALYSIS</div>
+    <h1>✨ AI 個人色彩分析報告</h1>
+    <p>利用 AI 人臉偵測、光譜分析與氛圍感知，為您找出最適合的色彩型態</p>
+  </div>
+
+  <!-- upload -->
+  <div id="uploadStage" class="card">
+    <div class="icon">📷</div>
+    <h2>上傳您的人像照片</h2>
+    <p>建議使用光線均勻、正面、露出臉部與頭髮的照片，且為無濾鏡、無美顏的情況下，以提升分析的精準度</p>
+    <p>支援拖曳圖片到此處，或點擊選擇檔案</p>
+    <button class="btn" type="button">選擇照片</button>
+    <input type="file" id="fileInput" accept="image/*">
+    <div class="privacy-note">🔒 所有影像分析皆在您的瀏覽器本機完成，照片不會上傳至任何伺服器（僅會從公開 CDN 載入 AI 模型檔案）。</div>
+  </div>
+
+  <!-- loading -->
+  <div id="loadingStage" class="card">
+    <div class="spinner"></div>
+    <div id="loadingText">正在載入 AI 臉部偵測模型...</div>
+  </div>
+
+  <!-- results -->
+  <div id="resultStage">
+
+    <div class="grid-top">
+      <!-- skin tone -->
+      <div class="card">
+        <div class="card-title"><span class="dot"></span>膚色底調分析</div>
+        <div class="swatch-row">
+          <div class="swatch-crop" id="skinCrop"></div>
+          <div class="swatch-info">
+            <b>膚色：</b><span id="skinRgbText"></span><br>
+            <span id="skinLabText"></span>
+            <div class="mini-bars" id="skinBars"></div>
+          </div>
+        </div>
+        <div class="swatch-row">
+          <div class="swatch-crop" id="highlightCrop"></div>
+          <div class="swatch-info">
+            <b>高光色澤：</b><span id="highlightRgbText"></span><br>
+            <span id="highlightLabText"></span>
+            <div class="mini-bars" id="highlightBars"></div>
+          </div>
+        </div>
+        <div class="precision-label">底調精準度</div>
+        <div class="precision-track">
+          <div class="precision-fill" id="precisionFill"></div>
+          <div class="precision-dot" id="precisionDot"></div>
+        </div>
+        <div class="precision-scale"><span>0</span><span>20</span><span>40</span><span>60</span><span>80</span><span>100</span></div>
+        <div class="precision-result" id="precisionResult"></div>
+      </div>
+
+      <!-- photo -->
+      <div class="card photo-card">
+        <div class="photo-frame">
+          <img id="displayImg" alt="人像照片">
+          <canvas id="overlayCanvas"></canvas>
+        </div>
+        <div class="photo-caption" id="detectCaption"></div>
+        <button class="reupload-btn" id="reuploadBtn">重新上傳照片</button>
+      </div>
+
+      <!-- eye/hair -->
+      <div class="card">
+        <div class="card-title"><span class="dot"></span>瞳孔與頭髮色彩分析</div>
+        <div class="eyehair-row">
+          <div class="eh-crop" id="eyeCrop"></div>
+          <div class="eh-crop" id="hairCrop"></div>
+        </div>
+        <div class="eh-text">
+          瞳孔色澤：<b id="eyeName"></b><br>
+          頭髮色澤：<b id="hairName"></b>
+        </div>
+        <div class="contrast-row">
+          對比度：<b id="contrastLevel" style="color:var(--text)"></b>
+          <span class="chip" id="chipSkin"></span>
+          <span class="chip" id="chipHair"></span>
+          <span class="chip" id="chipEye"></span>
+        </div>
+
+        <div class="card-title" style="margin-top:18px;"><span class="dot"></span>整體氛圍感知</div>
+        <div class="radar-wrap" id="radarWrap"></div>
+        <div class="radar-caption" id="radarCaption"></div>
+      </div>
+    </div>
+
+    <!-- analysis result -->
+    <div class="card result-card">
+      <div class="card-title"><span class="dot"></span>分析結果</div>
+      <div class="season-title">👑 您的季節型：<span id="seasonName"></span><span class="en" id="seasonEn"></span></div>
+      <div class="stat-grid">
+        <div class="stat-box">
+          <div class="label">膚色底調 (Undertone)</div>
+          <div class="value" id="statUndertone"></div>
+          <div class="stat-bar-track"><div class="stat-bar-fill" id="barUndertone"></div></div>
+        </div>
+        <div class="stat-box">
+          <div class="label">明度 (Lightness)</div>
+          <div class="value" id="statValue"></div>
+          <div class="sub" id="statValueSub"></div>
+          <div class="stat-bar-track"><div class="stat-bar-fill" id="barValue"></div></div>
+        </div>
+        <div class="stat-box">
+          <div class="label">飽和度 (Chroma)</div>
+          <div class="value" id="statChroma"></div>
+          <div class="sub" id="statChromaSub"></div>
+          <div class="stat-bar-track"><div class="stat-bar-fill" id="barChroma"></div></div>
+        </div>
+        <div class="stat-box">
+          <div class="label">氛圍相容度</div>
+          <div class="value" id="statCompat"></div>
+          <div class="sub">綜合風格一致性</div>
+          <div class="stat-bar-track"><div class="stat-bar-fill" id="barCompat"></div></div>
+        </div>
+      </div>
+      <div class="result-desc" id="resultDesc"></div>
+
+      <!-- 代表明星展示區 -->
+      <div class="celebrity-box">
+        <div class="celebrity-title">🌟 同季節代表明星：</div>
+        <div class="celebrity-tags" id="celebrityTags"></div>
+      </div>
+    </div>
+
+    <!-- palette -->
+    <div class="card">
+      <div class="card-title"><span class="dot"></span>推薦色盤與穿搭建議</div>
+      <div class="palette-groups" id="paletteGroups"></div>
+      <div class="outfit-note" id="outfitNote"></div>
+    </div>
+
+    <div class="footer-note">本報告由 AI 影像色彩演算法自動生成，結果為風格穿搭參考，並非專業醫學或色彩諮詢診斷。</div>
+  </div>
+
+</div>
+
+<script>
+const MODEL_URLS = [
+  'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model',
+  'https://justadudewhohacks.github.io/face-api.js/models',
+  'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights'
+];
+let modelsReady = false;
+
+const uploadStage = document.getElementById('uploadStage');
+const loadingStage = document.getElementById('loadingStage');
+const loadingText = document.getElementById('loadingText');
+const resultStage = document.getElementById('resultStage');
+const fileInput = document.getElementById('fileInput');
+const displayImg = document.getElementById('displayImg');
+const overlayCanvas = document.getElementById('overlayCanvas');
+
+uploadStage.addEventListener('click', ()=> fileInput.click());
+['dragover','dragenter'].forEach(evt=>{
+  uploadStage.addEventListener(evt, e=>{e.preventDefault(); uploadStage.classList.add('drag');});
+});
+['dragleave','drop'].forEach(evt=>{
+  uploadStage.addEventListener(evt, e=>{e.preventDefault(); uploadStage.classList.remove('drag');});
+});
+uploadStage.addEventListener('drop', e=>{
+  const f = e.dataTransfer.files[0];
+  if(f) handleFile(f);
+});
+fileInput.addEventListener('change', e=>{
+  const f = e.target.files[0];
+  if(f) handleFile(f);
+});
+document.getElementById('reuploadBtn').addEventListener('click', ()=>{
+  resultStage.style.display='none';
+  uploadStage.style.display='block';
+  fileInput.value='';
+  const ctx = overlayCanvas.getContext('2d');
+  ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+});
+
+function handleFile(file){
+  const reader = new FileReader();
+  reader.onload = e => startAnalysis(e.target.result);
+  reader.readAsDataURL(file);
+}
+
+// 修正 Canvas Resize 與比例變形問題
+function updateCanvasDimensions() {
+  if (!displayImg || !overlayCanvas) return;
+  const rect = displayImg.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return;
+  
+  // 保持畫布解析度與 CSS 顯示尺寸 1:1 吻合
+  overlayCanvas.width = rect.width;
+  overlayCanvas.height = rect.height;
+  overlayCanvas.style.width = rect.width + 'px';
+  overlayCanvas.style.height = rect.height + 'px';
+}
+
+// 在 Canvas 上繪製 68 特徵點 (分析時顯示)
+function renderLandmarksToCanvas(sourceCanvas, box, landmarks) {
+  updateCanvasDimensions();
+  const ctx = overlayCanvas.getContext('2d');
+  ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+  const scaleX = overlayCanvas.width / sourceCanvas.width;
+  const scaleY = overlayCanvas.height / sourceCanvas.height;
+
+  // 繪製臉部外框
+  ctx.strokeStyle = 'rgba(143,126,232,0.85)';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(box.x * scaleX, box.y * scaleY, box.width * scaleX, box.height * scaleY);
+
+  // 繪製 68 個特徵點與連線
+  if (landmarks) {
+    const pts = landmarks.positions.map(p => ({ x: p.x * scaleX, y: p.y * scaleY }));
+    const groups = [
+      pts.slice(0, 17), pts.slice(17, 22), pts.slice(22, 27),
+      pts.slice(27, 31), pts.slice(31, 36),
+      pts.slice(36, 42), pts.slice(42, 48), pts.slice(48, 60), pts.slice(60, 68)
+    ];
+    ctx.strokeStyle = 'rgba(231,143,196,0.75)';
+    ctx.lineWidth = 1;
+    groups.forEach(g => {
+      ctx.beginPath();
+      g.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+      ctx.stroke();
+    });
+    ctx.fillStyle = '#e78fc4';
+    pts.forEach(p => {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+}
+
+async function startAnalysis(dataUrl){
+  uploadStage.style.display='none';
+  resultStage.style.display='none';
+  loadingStage.style.display='block';
+  loadingText.textContent = '正在載入 AI 臉部偵測模型...';
+
+  const img = new Image();
+  img.onload = async ()=>{
+    displayImg.src = dataUrl;
+    
+    // 確保圖片載入完成後校正 Canvas 尺寸
+    await new Promise(resolve => {
+      if (displayImg.complete) resolve();
+      else displayImg.onload = resolve;
+    });
+    updateCanvasDimensions();
+
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d', {willReadFrequently:true});
+    ctx.drawImage(img,0,0);
+
+    applyAutoWhiteBalance(ctx, canvas.width, canvas.height);
+
+    let detection = null;
+    try{
+      if(!modelsReady){
+        let loaded = false;
+        for(const url of MODEL_URLS){
+          try{
+            await faceapi.nets.tinyFaceDetector.loadFromUri(url);
+            await faceapi.nets.faceLandmark68Net.loadFromUri(url);
+            loaded = true;
+            break;
+          }catch(e){ console.warn('模型來源載入失敗，改試下一個來源', url, e); }
+        }
+        modelsReady = loaded;
+        if(!loaded) throw new Error('所有模型來源皆載入失敗');
+      }
+      loadingText.textContent = '正在偵測臉部特徵點...';
+      detection = await faceapi.detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions({inputSize:320, scoreThreshold:0.4})).withFaceLandmarks();
+    }catch(err){
+      console.warn('face-api unavailable, using fallback estimation', err);
+      detection = null;
+    }
+
+    // 分析時顯示 Landmark 特徵點
+    if (detection) {
+      renderLandmarksToCanvas(canvas, detection.detection.box, detection.landmarks);
+      loadingText.textContent = '已成功定位臉部特徵點，正在進行色彩光譜分析...';
+    } else {
+      loadingText.textContent = '正在進行色彩光譜分析...';
+    }
+
+    setTimeout(()=>{
+      runFullAnalysis(ctx, canvas, detection);
+    }, 600);
+  };
+  img.src = dataUrl;
+}
+
+// ---------- color math ----------
+function rgbToLab(r,g,b){
+  let [rr,gg,bb] = [r,g,b].map(v=>{
+    v/=255;
+    return v>0.04045 ? Math.pow((v+0.055)/1.055,2.4) : v/12.92;
+  });
+  let x = rr*0.4124+gg*0.3576+bb*0.1805;
+  let y = rr*0.2126+gg*0.7152+bb*0.0722;
+  let z = rr*0.0193+gg*0.1192+bb*0.9505;
+  x/=0.95047; y/=1.0; z/=1.08883;
+  const f = t => t>0.008856 ? Math.cbrt(t) : (7.787*t + 16/116);
+  const fx=f(x), fy=f(y), fz=f(z);
+  return { L: 116*fy-16, a: 500*(fx-fy), b: 200*(fy-fz) };
+}
+function avgPixels(ctx, cx, cy, r, w, h){
+  cx = Math.max(r, Math.min(w-r-1, Math.round(cx)));
+  cy = Math.max(r, Math.min(h-r-1, Math.round(cy)));
+  const size = r*2;
+  const data = ctx.getImageData(cx-r, cy-r, size, size).data;
+  let R=0,G=0,B=0,n=0;
+  for(let i=0;i<data.length;i+=4){
+    R+=data[i]; G+=data[i+1]; B+=data[i+2]; n++;
+  }
+  return { r:Math.round(R/n), g:Math.round(G/n), b:Math.round(B/n) };
+}
+function hexOf(c){ return '#'+[c.r,c.g,c.b].map(v=>v.toString(16).padStart(2,'0')).join(''); }
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+
+// ====== 自動白平衡 (Gray World Algorithm) ======
+function applyAutoWhiteBalance(ctx, width, height) {
+  const imgData = ctx.getImageData(0, 0, width, height);
+  const data = imgData.data;
+  let sumR = 0, sumG = 0, sumB = 0;
+  const totalPixels = width * height;
+
+  for (let i = 0; i < data.length; i += 4) {
+    sumR += data[i];
+    sumG += data[i + 1];
+    sumB += data[i + 2];
+  }
+
+  const avgR = sumR / totalPixels || 1;
+  const avgG = sumG / totalPixels || 1;
+  const avgB = sumB / totalPixels || 1;
+
+  const kr = avgG / avgR;
+  const kb = avgG / avgB;
+
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = Math.min(255, data[i] * kr);
+    data[i + 2] = Math.min(255, data[i + 2] * kb);
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+}
+
+// ====== 強化髮色與背景過濾採樣 ======
+function colorDistance(c1, c2) {
+  return Math.sqrt(
+    Math.pow(c1.r - c2.r, 2) +
+    Math.pow(c1.g - c2.g, 2) +
+    Math.pow(c1.b - c2.b, 2)
+  );
+}
+
+function getRobustHairSample(ctx, box, imgWidth, imgHeight) {
+  const c1 = ctx.getImageData(5, 5, 1, 1).data;
+  const c2 = ctx.getImageData(Math.max(0, imgWidth - 5), 5, 1, 1).data;
+  const c3 = ctx.getImageData(5, Math.max(0, imgHeight - 5), 1, 1).data;
+  const c4 = ctx.getImageData(Math.max(0, imgWidth - 5), Math.max(0, imgHeight - 5), 1, 1).data;
+  const bg = {
+    r: (c1[0] + c2[0] + c3[0] + c4[0]) / 4,
+    g: (c1[1] + c2[1] + c3[1] + c4[1]) / 4,
+    b: (c1[2] + c2[2] + c3[2] + c4[2]) / 4
+  };
+
+  const candidates = [
+    { x: box.x + box.width * 0.5, y: Math.max(0, box.y - box.height * 0.1) },
+    { x: box.x + box.width * 0.3, y: Math.max(0, box.y - box.height * 0.08) },
+    { x: box.x + box.width * 0.7, y: Math.max(0, box.y - box.height * 0.08) },
+    { x: box.x + box.width * 0.15, y: box.y + box.height * 0.2 },
+    { x: box.x + box.width * 0.85, y: box.y + box.height * 0.2 }
+  ];
+
+  let bestColor = null;
+  let maxScore = -Infinity;
+
+  candidates.forEach(pt => {
+    const cx = Math.min(Math.max(2, Math.floor(pt.x)), imgWidth - 3);
+    const cy = Math.min(Math.max(2, Math.floor(pt.y)), imgHeight - 3);
+    
+    const color = avgPixels(ctx, cx, cy, 3, imgWidth, imgHeight);
+    const distToBg = colorDistance(color, bg);
+    const brightness = (color.r + color.g + color.b) / 3;
+
+    let score = distToBg;
+    if (distToBg < 25) score -= 200;
+    if (brightness > 235 || brightness < 15) score -= 100;
+
+    if (score > maxScore) {
+      maxScore = score;
+      bestColor = color;
+    }
+  });
+
+  return bestColor || avgPixels(ctx, box.x + box.width * 0.5, Math.max(0, box.y - box.height * 0.05), 3, imgWidth, imgHeight);
+}
+
+const NAMED_COLORS = [
+  {name:'柔和灰藍 (Soft Gray-Blue)', h:210,s:25,l:55},
+  {name:'清澈藍 (Clear Blue)', h:210,s:55,l:45},
+  {name:'榛果棕 (Hazel Brown)', h:35,s:45,l:40},
+  {name:'琥珀棕 (Amber Brown)', h:30,s:55,l:38},
+  {name:'深咖啡棕 (Deep Coffee Brown)', h:25,s:35,l:22},
+  {name:'柔和碧綠 (Soft Green)', h:150,s:30,l:45},
+  {name:'灰色 (Grey)', h:0,s:5,l:50},
+  {name:'柔和冷黑棕 (Soft Cool Black-Brown)', h:20,s:20,l:16},
+  {name:'暖黑棕 (Warm Black-Brown)', h:25,s:30,l:15},
+  {name:'亮金棕 (Golden Brown)', h:38,s:55,l:45},
+  {name:'炭黑 (Charcoal Black)', h:0,s:0,l:10},
+  {name:'亞麻淺棕 (Ash Light Brown)', h:32,s:22,l:55},
+];
+function rgbToHsl(r,g,b){
+  r/=255; g/=255; b/=255;
+  const max=Math.max(r,g,b), min=Math.min(r,g,b);
+  let h=0,s=0,l=(max+min)/2;
+  if(max!==min){
+    const d=max-min;
+    s = l>0.5 ? d/(2-max-min) : d/(max+min);
+    switch(max){
+      case r: h=(g-b)/d+(g<b?6:0); break;
+      case g: h=(b-r)/d+2; break;
+      case b: h=(r-g)/d+4; break;
+    }
+    h*=60;
+  }
+  return {h, s:s*100, l:l*100};
+}
+function nearestColorName(rgb){
+  const hsl = rgbToHsl(rgb.r,rgb.g,rgb.b);
+  let best=null, bestD=Infinity;
+  NAMED_COLORS.forEach(c=>{
+    const dh = Math.min(Math.abs(hsl.h-c.h), 360-Math.abs(hsl.h-c.h));
+    const d = dh*dh*0.02 + Math.pow(hsl.s-c.s,2) + Math.pow(hsl.l-c.l,2);
+    if(d<bestD){ bestD=d; best=c; }
+  });
+  return best ? best.name : '未知色澤';
+}
+
+// ---------- season families (加入代表明星) ----------
+const FAMILIES = {
+  spring:{
+    zh:'春季型', en:'Spring', warm:true,
+    celebs: ['潤娥 (Yoona)', '許瑋甯', 'IU (李知恩)'],
+    baseDesc:'膚色偏暖、明亮清新，肌膚透著自然的蜜金光澤。',
+    fit:'最適合珊瑚橘、鵝黃、嫩綠與奶油白等清爽明量的暖色系。',
+    groups:[
+      {title:'核心明亮色', colors:['#FFB199','#FFD68A','#B7E4A0','#FFEB99','#FF9C7A','#E8F27A']},
+      {title:'優雅暖膚色', colors:['#E8A87C','#D9A441','#C97B4A','#F0C987','#E0876A','#C9A24A']},
+      {title:'清透嫩彩色', colors:['#FFD3B0','#FFF3B0','#A0E7C4','#FFB6C1','#87CEEB','#F6D186']},
+    ],
+    outfitPlan:{
+      outfit:'上半身可以多嘗試珊瑚橘、蜜桃粉、鵝黃這類飽和度適中又透著暖意的顏色，會讓氣色看起來特別有精神；下半身或外套則可以用駝色、奶茶色、卡其色來延伸暖膚色的溫潤感，整體會更協調。材質上建議挑選帶點光澤或輕薄透氣的棉麻、絲質，避免過厚重、暗沉的厚呢或啞光布料，那會讓您原本明亮的氣色被壓暗。配色上可以採「一亮一穩」的組合，例如鵝黃上衣配卡其寬褲，或珊瑚橘洋裝配奶油白外套，讓明亮色與大地色互相襯托。',
+      accessories:'金屬配件建議選擇金色或玫瑰金，會比銀色更貼合您的暖膚底；包款與鞋款可挑選駝色、奶油白等基礎色，方便與各種明亮色上衣搭配。',
+      makeup:'妝容可挑選珊瑚色腮紅、蜜桃色唇膏，眼影用香檳金、淺棕色系來加強清透感；整體底妝建議偏向自然透亮，避免過厚的霧感底妝壓暗氣色。',
+      avoid:'過於厚重的黑色、深藏青或霧灰色系容易讓臉色顯得沉悶沒精神，建議只作為小面積點綴（如腰帶、鞋款），而不要大面積穿在身上。',
+      summary:'春季型最迷人的穿搭效果就是「輕盈、透亮、有活力」，適合日常通勤、約會、或需要展現親和力的場合。',
+    },
+  },
+  summer:{
+    zh:'夏季型', en:'Summer', warm:false,
+    celebs: ['張員瑛', '孫藝真', '葉舒華'],
+    baseDesc:'膚色偏冷、質感柔和清爽，肌膚帶著淡淡的粉調光澤。',
+    fit:'最適合柔和莫蘭迪色、粉紫色系與柔和藍色。',
+    groups:[
+      {title:'核心柔和色', colors:['#A9C6E8','#D9C7E8','#A0E7C4','#B7C6E0','#D9CFE8','#C9AEC2']},
+      {title:'優雅莫蘭迪色', colors:['#C48D93','#8FAE8B','#CBB499','#A8899A','#B7A18F','#93A597']},
+      {title:'清透亮色', colors:['#4F8FDB','#57D9A3','#F5E663','#3B3B4A','#FF6F61','#2E3A59']},
+    ],
+    outfitPlan:{
+      outfit:'日常穿搭可以多運用霧灰藍、薰衣草紫、豆沙粉這類莫蘭迪色系，這些顏色帶著一點灰霧感，剛好能襯托您偏冷、偏粉的膚色底調，讓氣色顯得柔和又有質感。整體搭配建議採「同色系深淺堆疊」，例如淺灰藍上衣配霧藍色長褲，或粉紫上衣配灰紫色外套，會比大面積使用高飽和的鮮豔色更適合您。材質上可以選擇霧面、有垂墜感的布料，像是精梳棉、雪紡或啞光針織，會比亮面緞面更貼合您柔和清透的氣質。',
+      accessories:'配件與金屬色建議以銀色、白金或霧面金屬為主，會比亮金色更協調；包款與鞋款可挑選灰藕色、霧藍色等柔和基礎色，維持整體低調高級的氣質。',
+      makeup:'妝容可以選擇豆沙色、玫瑰色系的唇彩與腮紅，眼影則適合灰紫、霧粉、淺灰棕這類低飽和色，底妝建議偏向清透霧面，避免過度光澤感。',
+      avoid:'過於鮮豔飽和的正紅、橘黃、亮綠等暖色容易讓您的膚色顯得偏黃或氣色不佳，建議只用在小面積配件上（如耳環、包款）淺嚐即止。',
+      summary:'夏季型的穿搭精髓在於「柔而不弱、淡而有型」，很適合氣質通勤、約會，或需要展現溫柔親和力的場合。',
+    },
+  },
+  autumn:{
+    zh:'秋季型', en:'Autumn', warm:true,
+    celebs: ['BLACKPINK Jennie', '韓韶禧', '許光漢'],
+    baseDesc:'膚色偏暖、沉穩溫潤，肌膚透著自然的琥珀與蜜糖質感。',
+    fit:'最適合大地色系、焦糖棕與橄欖綠等溫暖沉穩的色彩。',
+    groups:[
+      {title:'核心大地色', colors:['#A9A26C','#B5533C','#D9A441','#C97B4A','#4B6043','#8C6A4C']},
+      {title:'優雅莫蘭迪色', colors:['#B08968','#7A8B69','#C2A66B','#9A7B6B','#6B4F3A','#A38560']},
+      {title:'溫潤暖彩色', colors:['#E2711D','#2A9D8F','#DDA448','#8A3B2B','#5F7A61','#C08552']},
+    ],
+    outfitPlan:{
+      outfit:'核心單品可以多選擇焦糖棕、駝色、磚紅、橄欖綠這類飽和度適中、明度偏深的暖色，會讓您的膚色看起來更透亮有光澤。材質上很適合選擇有溫度感的布料，像是麂皮、粗花呢、燈芯絨、厚棉或毛呢大衣，這些材質的紋理感能呼應您本身沉穩溫潤的氣態；配色上可以嘗試「同色調深淺層疊」，例如卡其襯衫配巧克力棕長褲，或墨綠針織配駝色大衣，穿出高級的秋日感。',
+      accessories:'金屬配件建議以霧金、古銅或黃銅色為主，會比冷調銀色更加分；包款與鞋款可挑選咖啡色、栗子色等深色皮革材質，強化整體溫潤質感。',
+      makeup:'妝容可以選擇磚紅、南瓜橘、焦糖色系的唇彩與腮紅，眼影適合大地色、可可色、橄欖綠這類溫暖色調，底妝建議偏向自然霧感、略帶蜜色光澤。',
+      avoid:'過於淺淡、清冷的粉彩色（如嫩粉、粉藍、薄荷綠）容易讓您的氣色顯得蒼白沒精神，建議少量使用或搭配大地色中和。',
+      summary:'秋季型的穿搭魅力在於「溫暖、厚實、耐看」，特別適合秋冬換季、正式場合或需要展現沉穩專業感的穿搭情境。',
+    },
+  },
+  winter:{
+    zh:'冬季型', en:'Winter', warm:false,
+    celebs: ['BLACKPINK Jisoo', 'aespa Karina', '周子瑜'],
+    baseDesc:'膚色偏冷、對比鮮明，肌膚透出清晰銳利的瓷感光澤。',
+    fit:'最適合純色系、寶石色調與黑白對比穿搭。',
+    groups:[
+      {title:'核心冰調色', colors:['#A9D6E5','#B0B7C6','#E8B4BC','#B497D6','#7FA6C9','#C9CEDC']},
+      {title:'優雅深邃色', colors:['#6B4162','#2C5F60','#722F37','#3B3B3B','#4A3B5C','#1F3A5F']},
+      {title:'清透鮮明色', colors:['#D7263D','#1D3E9C','#009B77','#C2185B','#1A1A1A','#FFFFFF']},
+    ],
+    outfitPlan:{
+      outfit:'建議以「黑、白、正紅、寶藍、翡翠綠」這類飽和度高、色相純粹的顏色作為主色，會讓您的五官與氣場更加立態突出。經典的黑白對比穿搭（如白襯衫配黑色西裝褲）特別適合您，能凸顯冬季型與生俱來的俐落與銳利感。材質上可以選擇挺括、有光澤感的布料，像是絲緞、皮革、精紡毛料，會比毛絨、粗織這類鬆軟材質更能襯托您的氣質；配色上建議減少層次堆疊，改以「單一鮮明色 + 黑白灰基礎色」的簡潔組合為主，例如正紅色大衣配黑色內搭與黑長靴，或寶藍色洋裝配純白外套。',
+      accessories:'金屬配件建議選擇銀色、白金或不鏽鋼材質，會比金色系更貼合您的冷調氣質；包款與鞋款可挑選黑、白等基礎色，維持俐落乾淨的整體輪廓。',
+      makeup:'妝容可以選擇正紅、莓果色的唇彩，眼影適合煙燻灰、深藍、酒紅這類飽和度高的深色系，底妝建議偏向清透瓷感，強化五官的立體對比。',
+      avoid:'霧面、灰濁、低飽和度的曖昧色系（如卡其、駝色、米黃）會讓您原本鮮明的氣質被削弱，建議盡量避免大面積使用。',
+      summary:'冬季型的穿搭精髓在於「乾淨、俐落、對比強烈」，很適合正式場合、宴會或需要展現強大氣場與專業感的穿搭情境。',
+    },
+  },
+};
+
+function describeLevel(v, lowLabel, midLabel, highLabel){
+  if(v<34) return lowLabel;
+  if(v<67) return midLabel;
+  return highLabel;
+}
+
+function estimateFaceRegionBySkin(ctx, W, H){
+  const cols = 32, rows = 32;
+  const cellW = W/cols, cellH = H/rows;
+  const full = ctx.getImageData(0,0,W,H).data;
+  const mask = [];
+  for(let ry=0; ry<rows; ry++){
+    mask[ry] = [];
+    for(let rx=0; rx<cols; rx++){
+      const px = Math.min(W-1, Math.floor(rx*cellW + cellW/2));
+      const py = Math.min(H-1, Math.floor(ry*cellH + cellH/2));
+      const idx = (py*W+px)*4;
+      mask[ry][rx] = isSkinPixel(full[idx], full[idx+1], full[idx+2]);
+    }
+  }
+  const visited = Array.from({length:rows}, ()=>Array(cols).fill(false));
+  const components = [];
+  for(let ry=0; ry<rows; ry++){
+    for(let rx=0; rx<cols; rx++){
+      if(mask[ry][rx] && !visited[ry][rx]){
+        let minX=rx,maxX=rx,minY=ry,maxY=ry,count=0;
+        const stack=[[ry,rx]];
+        visited[ry][rx]=true;
+        while(stack.length){
+          const [cy,cx] = stack.pop();
+          count++;
+          minX=Math.min(minX,cx); maxX=Math.max(maxX,cx);
+          minY=Math.min(minY,cy); maxY=Math.max(maxY,cy);
+          [[cy-1,cx],[cy+1,cx],[cy,cx-1],[cy,cx+1]].forEach(([ny,nx])=>{
+            if(ny>=0&&ny<rows&&nx>=0&&nx<cols&&mask[ny][nx]&&!visited[ny][nx]){
+              visited[ny][nx]=true; stack.push([ny,nx]);
+            }
+          });
+        }
+        components.push({minX,maxX,minY,maxY,count});
+      }
+    }
+  }
+  if(!components.length) return null;
+  const scored = components
+    .filter(c => c.count>=6)
+    .map(c=>{
+      const w = c.maxX-c.minX+1, h = c.maxY-c.minY+1;
+      const aspect = h/w;
+      const aspectScore = 1/(1+Math.abs(aspect-1.15));
+      const sizeScore = c.count;
+      const topScore = 1/(1+c.minY*0.15);
+      return { c, score: sizeScore*aspectScore*topScore };
+    })
+    .sort((a,b)=>b.score-a.score);
+  if(!scored.length) return null;
+  const best = scored[0].c;
+  let x = best.minX*cellW, y = best.minY*cellH;
+  let w = (best.maxX-best.minX+1)*cellW, h = (best.maxY-best.minY+1)*cellH;
+  const padTop = h*0.35, padSide = w*0.12, padBottom = h*0.06;
+  x = Math.max(0, x-padSide);
+  y = Math.max(0, y-padTop);
+  w = Math.min(W-x, w+padSide*2);
+  h = Math.min(H-y, h+padTop+padBottom);
+  return { x, y, width:w, height:h };
+}
+
+function isSkinPixel(r,g,b){
+  const cb = 128 - 0.168736*r - 0.331264*g + 0.5*b;
+  const cr = 128 + 0.5*r - 0.418688*g - 0.081312*b;
+  return r>50 && cb>=75 && cb<=135 && cr>=130 && cr<=180;
+}
+
+// ---------- main analysis ----------
+function runFullAnalysis(ctx, canvas, detection){
+  const W = canvas.width, H = canvas.height;
+  let box, landmarks = null;
+
+  if(detection && detection.detection){
+    box = detection.detection.box;
+    landmarks = detection.landmarks;
+    document.getElementById('detectCaption').innerHTML = '✅ AI 已成功偵測臉部特徵點，並完成 68 點光譜取樣分析';
+  }else{
+    box = estimateFaceRegionBySkin(ctx, W, H) || { x: W*0.22, y: H*0.16, width: W*0.56, height: H*0.62 };
+    document.getElementById('detectCaption').innerHTML = '⚠️ AI 使用簡化區域估算模式（無法完整偵測特徵點），結果僅供概略參考';
+  }
+
+  const sampleR = Math.max(4, Math.round(box.width*0.035));
+  let cheekPt, foreheadPt, eyePt;
+
+  if(landmarks){
+    const pts = landmarks.positions;
+    const jaw = pts.slice(0,17);
+    const rBrow = pts.slice(17,22), lBrow = pts.slice(22,27);
+    const nose = pts.slice(27,36);
+    const rEye = pts.slice(36,42);
+    const chin = jaw[8];
+    const browMidY = (rBrow.concat(lBrow)).reduce((s,p)=>s+p.y,0)/10;
+    const browMidX = (rBrow.concat(lBrow)).reduce((s,p)=>s+p.x,0)/10;
+
+    const leftCheek = { x:(jaw[2].x+nose[3].x)/2, y:(jaw[2].y+nose[3].y)/2 + box.height*0.03 };
+    const rightCheek = { x:(jaw[14].x+nose[8].x)/2, y:(jaw[14].y+nose[8].y)/2 + box.height*0.03 };
+    cheekPt = { x:(leftCheek.x+rightCheek.x)/2, y:(leftCheek.y+rightCheek.y)/2 };
+
+    foreheadPt = { x:browMidX, y: browMidY - (chin.y-browMidY)*0.55 };
+
+    const eyeCenter = (pts)=>{
+      const cx = pts.reduce((s,p)=>s+p.x,0)/pts.length;
+      const cy = pts.reduce((s,p)=>s+p.y,0)/pts.length;
+      return {x:cx,y:cy};
+    };
+    eyePt = eyeCenter(rEye);
+    eyePt.eyeWidth = Math.hypot(rEye[3].x-rEye[0].x, rEye[3].y-rEye[0].y);
+  }else{
+    cheekPt = { x: box.x+box.width*0.28, y: box.y+box.height*0.55 };
+    foreheadPt = { x: box.x+box.width*0.5, y: box.y+box.height*0.18 };
+    eyePt = { x: box.x+box.width*0.32, y: box.y+box.height*0.38, eyeWidth: box.width*0.16 };
+  }
+
+  const skinRGB = avgPixels(ctx, cheekPt.x, cheekPt.y, sampleR, W, H);
+  const highlightRGB = avgPixels(ctx, foreheadPt.x, foreheadPt.y, sampleR, W, H);
+  const hairRGB = getRobustHairSample(ctx, box, W, H);
+
+  const eyeR = Math.max(4, Math.round((eyePt.eyeWidth||box.width*0.15)*0.35));
+  const ex = clamp(Math.round(eyePt.x), eyeR, W-eyeR-1);
+  const ey = clamp(Math.round(eyePt.y), eyeR, H-eyeR-1);
+  const eyeData = ctx.getImageData(ex-eyeR, ey-eyeR, eyeR*2, eyeR*2).data;
+  let er=0,eg=0,eb=0,en=0;
+  for(let i=0;i<eyeData.length;i+=4){
+    const br=(eyeData[i]+eyeData[i+1]+eyeData[i+2])/3;
+    if(br>28){ er+=eyeData[i]; eg+=eyeData[i+1]; eb+=eyeData[i+2]; en++; }
+  }
+  const eyeRGB = en>0 ? {r:Math.round(er/en), g:Math.round(eg/en), b:Math.round(eb/en)} : {r:90,g:80,b:70};
+
+  const skinLab = rgbToLab(skinRGB.r, skinRGB.g, skinRGB.b);
+  const highlightLab = rgbToLab(highlightRGB.r, highlightRGB.g, highlightRGB.b);
+  const hairLab = rgbToLab(hairRGB.r, hairRGB.g, hairRGB.b);
+
+  const hueAngle = Math.atan2(skinLab.b, skinLab.a) * 180/Math.PI;
+  const warmPercent = clamp(Math.round((hueAngle-38)*2.6 + 50), 2, 98);
+  const coolPercent = 100-warmPercent;
+  const isWarm = warmPercent>=50;
+
+  const chroma = Math.sqrt(skinLab.a*skinLab.a + skinLab.b*skinLab.b);
+  const chromaPercent = clamp(Math.round(chroma*2.6), 3, 98);
+
+  const valuePercent = clamp(Math.round(skinLab.L), 3, 98);
+
+  const contrastRaw = Math.abs(hairLab.L - skinLab.L);
+  const contrastPercent = clamp(Math.round(contrastRaw*1.4), 3, 98);
+  const contrastLabel = describeLevel(contrastPercent, '低對比', '中等對比', '高對比');
+
+  const precisionScore = clamp(Math.round(Math.abs(warmPercent-50)*1.9 + 15), 20, 99);
+
+  const family = isWarm
+    ? (valuePercent>=50 ? FAMILIES.spring : FAMILIES.autumn)
+    : (valuePercent>=50 ? FAMILIES.summer : FAMILIES.winter);
+
+  const compat = clamp(Math.round(100 - Math.abs(50-warmPercent)*0.3 - Math.abs(50-valuePercent)*0.15), 55, 99);
+
+  // ---------- render UI ----------
+  document.getElementById('skinCrop').style.background = hexOf(skinRGB);
+  document.getElementById('skinRgbText').textContent = `RGB (${skinRGB.r}, ${skinRGB.g}, ${skinRGB.b})`;
+  document.getElementById('skinLabText').textContent = `明度L* ${skinLab.L.toFixed(0)}・紅綠a* ${skinLab.a.toFixed(0)}・黃藍b* ${skinLab.b.toFixed(0)}`;
+  renderMiniBars('skinBars', skinRGB);
+
+  document.getElementById('highlightCrop').style.background = hexOf(highlightRGB);
+  document.getElementById('highlightRgbText').textContent = `RGB (${highlightRGB.r}, ${highlightRGB.g}, ${highlightRGB.b})`;
+  document.getElementById('highlightLabText').textContent = `明度L* ${highlightLab.L.toFixed(0)}・紅綠a* ${highlightLab.a.toFixed(0)}・黃藍b* ${highlightLab.b.toFixed(0)}`;
+  renderMiniBars('highlightBars', highlightRGB);
+
+  document.getElementById('precisionFill').style.width = precisionScore+'%';
+  document.getElementById('precisionDot').style.left = precisionScore+'%';
+  document.getElementById('precisionResult').textContent = `精準${isWarm?'暖':'冷'}色調 (${isWarm?'Warm':'Cool'}-leaning: ${Math.max(warmPercent,coolPercent)}%)`;
+
+  document.getElementById('eyeCrop').style.background = hexOf(eyeRGB);
+  document.getElementById('hairCrop').style.background = hexOf(hairRGB);
+  const eyeName = nearestColorName(eyeRGB);
+  const hairName = nearestColorName(hairRGB);
+  document.getElementById('eyeName').textContent = eyeName;
+  document.getElementById('hairName').textContent = hairName;
+  document.getElementById('contrastLevel').textContent = contrastLabel;
+  document.getElementById('chipSkin').style.background = hexOf(skinRGB);
+  document.getElementById('chipHair').style.background = hexOf(hairRGB);
+  document.getElementById('chipEye').style.background = hexOf(eyeRGB);
+
+  renderRadar(buildMoodScores({warmPercent, coolPercent, valuePercent, chromaPercent, contrastPercent}));
+
+  document.getElementById('seasonName').textContent = family.zh;
+  document.getElementById('seasonEn').textContent = ` (${family.en})`;
+
+  document.getElementById('statUndertone').textContent = `${Math.max(warmPercent,coolPercent)}% ${isWarm?'暖色調 (Warm)':'冷色調 (Cool)'}`;
+  document.getElementById('barUndertone').style.width = Math.max(warmPercent,coolPercent)+'%';
+
+  document.getElementById('statValue').textContent = valuePercent+'%';
+  document.getElementById('statValueSub').textContent = `(${describeLevel(valuePercent,'偏深','中等明度','高明度/偏白亮')})`;
+  document.getElementById('barValue').style.width = valuePercent+'%';
+
+  document.getElementById('statChroma').textContent = chromaPercent+'%';
+  document.getElementById('statChromaSub').textContent = `(${describeLevel(chromaPercent,'低飽和/柔和','中等飽和','高飽和/鮮明')})`;
+  document.getElementById('barChroma').style.width = chromaPercent+'%';
+
+  document.getElementById('statCompat').textContent = compat+'%';
+  document.getElementById('barCompat').style.width = compat+'%';
+
+  document.getElementById('resultDesc').innerHTML =
+    `${family.baseDesc}${family.fit} 對比度為<b>${contrastLabel}</b>，瞳孔色澤為<b>${eyeName}</b>，頭髮色澤為<b>${hairName}</b>，整體氛圍屬於<b>${family.zh}</b>質感。`;
+
+  // 渲染代表明星
+  const celebContainer = document.getElementById('celebrityTags');
+  celebContainer.innerHTML = family.celebs.map(c => `<span class="celebrity-tag">✨ ${c}</span>`).join('');
+
+  renderPalette(family);
+
+  // 分析完成：自動隱藏/清空特徵點
+  const oCtx = overlayCanvas.getContext('2d');
+  oCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+  loadingStage.style.display='none';
+  resultStage.style.display='block';
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+const MOOD_WORD_BANK = [
+  { label:'清透', score: m=>m.valuePercent },
+  { label:'深邃', score: m=>100-m.valuePercent },
+  { label:'素雅', score: m=>100-m.chromaPercent },
+  { label:'明亮', score: m=>m.chromaPercent },
+  { label:'溫柔', score: m=>(m.valuePercent+(100-m.chromaPercent))/2 },
+  { label:'高雅', score: m=>(100-m.chromaPercent)*0.6+m.contrastPercent*0.4 },
+  { label:'神秘', score: m=>m.contrastPercent*0.7+(100-m.valuePercent)*0.3 },
+  { label:'甜美', score: m=>m.warmPercent*0.5+m.valuePercent*0.5 },
+  { label:'知性', score: m=>m.coolPercent*0.5+(100-m.chromaPercent)*0.5 },
+  { label:'俐落', score: m=>m.contrastPercent*0.6+m.chromaPercent*0.4 },
+  { label:'浪漫', score: m=>m.warmPercent*0.4+(100-m.contrastPercent)*0.6 },
+  { label:'清新', score: m=>m.coolPercent*0.5+m.valuePercent*0.5 },
+  { label:'華麗', score: m=>m.contrastPercent*0.5+m.chromaPercent*0.5 },
+  { label:'沉穩', score: m=>(100-m.valuePercent)*0.5+(100-m.chromaPercent)*0.5 },
+  { label:'活潑', score: m=>m.chromaPercent*0.6+m.warmPercent*0.4 },
+];
+function buildMoodScores(metrics){
+  const ranked = MOOD_WORD_BANK
+    .map(w=>({ label:w.label, value: clamp(Math.round(w.score(metrics)),4,100) }))
+    .sort((a,b)=>b.value-a.value)
+    .slice(0,5);
+  const result = {};
+  ranked.forEach(r=> result[r.label]=r.value);
+  return result;
+}
+
+function renderMiniBars(id, rgb){
+  const el = document.getElementById(id);
+  el.innerHTML='';
+  const vals = [rgb.r,rgb.g,rgb.b, (rgb.r+rgb.g)/2, (rgb.g+rgb.b)/2, (rgb.r+rgb.b)/2, rgb.r*0.8, rgb.g*0.9];
+  vals.forEach(v=>{
+    const bar = document.createElement('span');
+    bar.style.height = clamp(Math.round(v/255*34),4,34)+'px';
+    el.appendChild(bar);
+  });
+}
+
+function renderRadar(values){
+  const labels = Object.keys(values);
+  const n = labels.length;
+  const size = 240, cx=size/2, cy=size/2, R=88;
+  const pointsFor = (scaleFn) => labels.map((k,i)=>{
+    const ang = -Math.PI/2 + i*(2*Math.PI/n);
+    const val = scaleFn(values[k]);
+    return [cx+Math.cos(ang)*R*val, cy+Math.sin(ang)*R*val];
+  });
+  const dataPoly = pointsFor(v=>clamp(v,4,100)/100).map(p=>p.join(',')).join(' ');
+  const gridPolys = [0.25,0.5,0.75,1].map(scale=>
+    pointsFor(()=>scale).map(p=>p.join(',')).join(' ')
+  );
+  const labelPos = labels.map((k,i)=>{
+    const ang = -Math.PI/2 + i*(2*Math.PI/n);
+    return { x: cx+Math.cos(ang)*(R+22), y: cy+Math.sin(ang)*(R+22), label:k };
+  });
+
+  let svg = `<svg viewBox="0 0 ${size} ${size}" width="100%" style="max-width:260px;display:block;margin:0 auto;">`;
+  gridPolys.forEach(gp=>{
+    svg += `<polygon points="${gp}" fill="none" stroke="#2a2e42" stroke-width="1"/>`;
+  });
+  svg += `<polygon points="${dataPoly}" fill="rgba(143,126,232,0.35)" stroke="#a993ee" stroke-width="2"/>`;
+  labelPos.forEach(p=>{
+    svg += `<text x="${p.x}" y="${p.y}" fill="#9498b0" font-size="11" text-anchor="middle" font-family="Noto Sans TC">${p.label}</text>`;
+  });
+  svg += `</svg>`;
+  document.getElementById('radarWrap').innerHTML = svg;
+
+  const sorted = Object.entries(values).sort((a,b)=>b[1]-a[1]).slice(0,4).map(e=>e[0]);
+  document.getElementById('radarCaption').textContent = `氛圍特徵：${sorted.join('、')}`;
+}
+
+function renderPalette(family){
+  const wrap = document.getElementById('paletteGroups');
+  wrap.innerHTML = family.groups.map(g=>`
+    <div>
+      <div class="pg-title">${g.title}</div>
+      <div class="pg-swatches">
+        ${g.colors.map(c=>`
+          <div class="pg-swatch" style="background:${c}; cursor:pointer;" onclick="copyHex('${c}')" title="點擊複製 ${c}">
+            <span class="hex">${c}</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  const p = family.outfitPlan;
+  document.getElementById('outfitNote').innerHTML = `
+    <div class="outfit-section">
+      <div class="outfit-sec-title"><span class="tag tag-outfit">穿搭建議</span></div>
+      <p>${p.outfit}</p>
+    </div>
+    <div class="outfit-section">
+      <div class="outfit-sec-title"><span class="tag tag-accessory">配件</span></div>
+      <p>${p.accessories}</p>
+    </div>
+    <div class="outfit-section">
+      <div class="outfit-sec-title"><span class="tag tag-makeup">妝容</span></div>
+      <p>${p.makeup}</p>
+    </div>
+    <div class="outfit-section">
+      <div class="outfit-sec-title"><span class="tag tag-avoid">避雷</span></div>
+      <p>${p.avoid}</p>
+    </div>
+    <div class="outfit-section outfit-summary">
+      <div class="outfit-sec-title"><span class="tag tag-summary">總結</span></div>
+      <p>${p.summary}</p>
+    </div>
+  `;
+}
+
+window.copyHex = (hex) => {
+  navigator.clipboard.writeText(hex).then(() => {
+    alert(`已複製色彩代碼：${hex}`);
+  }).catch(() => {
+    const input = document.createElement('input');
+    input.value = hex;
+    document.body.appendChild(input);
+    input.select();
+    document.execCommand('copy');
+    document.body.removeChild(input);
+    alert(`已複製色彩代碼：${hex}`);
+  });
+};
+
+// 視窗調整大小時，保持 Canvas 寬高與 CSS 同步，並確保隱藏/清除殘線
+window.addEventListener('resize', () => {
+  updateCanvasDimensions();
+  const ctx = overlayCanvas.getContext('2d');
+  ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+});
+</script>
+</body>
+</html>
