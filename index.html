@@ -235,11 +235,11 @@
 
   <div class="header">
     <div class="eyebrow">AI VISION · COLOR ANALYSIS</div>
-    <h1>✨ AI 個人色彩</h1>
+    <h1>✨ AI 個人色彩分析報告</h1>
     <p>利用 AI 人臉偵測、光譜分析與氛圍感知，為您找出最適合的色彩型態</p>
   </div>
 
-  <!-- upload -->
+  <!-- upload stage -->
   <div id="uploadStage" class="card">
     <div class="icon">📷</div>
     <h2>上傳您的人像照片</h2>
@@ -250,13 +250,13 @@
     <div class="privacy-note">🔒 所有影像分析皆在您的瀏覽器本機完成，照片不會上傳至任何伺服器（僅會從公開 CDN 載入 AI 模型檔案）。</div>
   </div>
 
-  <!-- loading -->
+  <!-- loading stage -->
   <div id="loadingStage" class="card">
     <div class="spinner"></div>
     <div id="loadingText">正在載入 AI 臉部偵測模型...</div>
   </div>
 
-  <!-- results -->
+  <!-- result stage -->
   <div id="resultStage">
 
     <div class="grid-top">
@@ -423,14 +423,13 @@ function updateCanvasDimensions() {
   const rect = displayImg.getBoundingClientRect();
   if (rect.width === 0 || rect.height === 0) return;
   
-  // 保持畫布解析度與 CSS 顯示尺寸 1:1 吻合
   overlayCanvas.width = rect.width;
   overlayCanvas.height = rect.height;
   overlayCanvas.style.width = rect.width + 'px';
   overlayCanvas.style.height = rect.height + 'px';
 }
 
-// 在 Canvas 上繪製 68 特徵點 (分析時顯示)
+// 在 Canvas 上繪製 68 特徵點
 function renderLandmarksToCanvas(sourceCanvas, box, landmarks) {
   updateCanvasDimensions();
   const ctx = overlayCanvas.getContext('2d');
@@ -478,7 +477,6 @@ async function startAnalysis(dataUrl){
   img.onload = async ()=>{
     displayImg.src = dataUrl;
     
-    // 確保圖片載入完成後校正 Canvas 尺寸
     await new Promise(resolve => {
       if (displayImg.complete) resolve();
       else displayImg.onload = resolve;
@@ -490,8 +488,6 @@ async function startAnalysis(dataUrl){
     canvas.height = img.naturalHeight;
     const ctx = canvas.getContext('2d', {willReadFrequently:true});
     ctx.drawImage(img,0,0);
-
-    applyAutoWhiteBalance(ctx, canvas.width, canvas.height);
 
     let detection = null;
     try{
@@ -515,7 +511,6 @@ async function startAnalysis(dataUrl){
       detection = null;
     }
 
-    // 分析時顯示 Landmark 特徵點
     if (detection) {
       renderLandmarksToCanvas(canvas, detection.detection.box, detection.landmarks);
       loadingText.textContent = '已成功定位臉部特徵點，正在進行色彩光譜分析...';
@@ -558,35 +553,68 @@ function avgPixels(ctx, cx, cy, r, w, h){
 function hexOf(c){ return '#'+[c.r,c.g,c.b].map(v=>v.toString(16).padStart(2,'0')).join(''); }
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 
-// ====== 自動白平衡 (Gray World Algorithm) ======
-function applyAutoWhiteBalance(ctx, width, height) {
-  const imgData = ctx.getImageData(0, 0, width, height);
-  const data = imgData.data;
+// ====== 瞳孔分析邏輯 (中位數濾波與雙眼聯合採樣) ======
+function getAccurateEyeColor(ctx, landmarks, box, W, H) {
+  let eyePoints = [];
+  if (landmarks) {
+    const pts = landmarks.positions;
+    const rEye = pts.slice(36, 42);
+    const lEye = pts.slice(42, 48);
+
+    const getCenter = p => ({
+      x: p.reduce((s, c) => s + c.x, 0) / p.length,
+      y: p.reduce((s, c) => s + c.y, 0) / p.length,
+      w: Math.hypot(p[3].x - p[0].x, p[3].y - p[0].y)
+    });
+
+    eyePoints.push(getCenter(rEye), getCenter(lEye));
+  } else {
+    eyePoints.push({
+      x: box.x + box.width * 0.32,
+      y: box.y + box.height * 0.38,
+      w: box.width * 0.16
+    });
+  }
+
+  let allPixels = [];
+
+  eyePoints.forEach(eye => {
+    const r = Math.max(3, Math.round(eye.w * 0.22));
+    const cx = clamp(Math.round(eye.x), r, W - r - 1);
+    const cy = clamp(Math.round(eye.y), r, H - r - 1);
+    const data = ctx.getImageData(cx - r, cy - r, r * 2, r * 2).data;
+
+    for (let i = 0; i < data.length; i += 4) {
+      const red = data[i], green = data[i + 1], blue = data[i + 2];
+      const brightness = 0.299 * red + 0.587 * green + 0.114 * blue;
+      if (brightness > 35 && brightness < 185) {
+        allPixels.push({ r: red, g: green, b: blue, br: brightness });
+      }
+    }
+  });
+
+  if (allPixels.length === 0) return { r: 80, g: 70, b: 60 };
+
+  allPixels.sort((a, b) => a.br - b.br);
+  const midStart = Math.floor(allPixels.length * 0.25);
+  const midEnd = Math.floor(allPixels.length * 0.75);
+  const validPixels = allPixels.slice(midStart, midEnd + 1);
+
   let sumR = 0, sumG = 0, sumB = 0;
-  const totalPixels = width * height;
+  validPixels.forEach(p => {
+    sumR += p.r;
+    sumG += p.g;
+    sumB += p.b;
+  });
 
-  for (let i = 0; i < data.length; i += 4) {
-    sumR += data[i];
-    sumG += data[i + 1];
-    sumB += data[i + 2];
-  }
-
-  const avgR = sumR / totalPixels || 1;
-  const avgG = sumG / totalPixels || 1;
-  const avgB = sumB / totalPixels || 1;
-
-  const kr = avgG / avgR;
-  const kb = avgG / avgB;
-
-  for (let i = 0; i < data.length; i += 4) {
-    data[i] = Math.min(255, data[i] * kr);
-    data[i + 2] = Math.min(255, data[i + 2] * kb);
-  }
-
-  ctx.putImageData(imgData, 0, 0);
+  return {
+    r: Math.round(sumR / validPixels.length),
+    g: Math.round(sumG / validPixels.length),
+    b: Math.round(sumB / validPixels.length)
+  };
 }
 
-// ====== 強化髮色與背景過濾採樣 ======
+// ====== 髮色與背景過濾採樣 ======
 function colorDistance(c1, c2) {
   return Math.sqrt(
     Math.pow(c1.r - c2.r, 2) +
@@ -679,7 +707,7 @@ function nearestColorName(rgb){
   return best ? best.name : '未知色澤';
 }
 
-// ---------- season families (加入代表明星) ----------
+// ---------- season families ----------
 const FAMILIES = {
   spring:{
     zh:'春季型', en:'Spring', warm:true,
@@ -843,14 +871,13 @@ function runFullAnalysis(ctx, canvas, detection){
   }
 
   const sampleR = Math.max(4, Math.round(box.width*0.035));
-  let cheekPt, foreheadPt, eyePt;
+  let cheekPt, foreheadPt;
 
   if(landmarks){
     const pts = landmarks.positions;
     const jaw = pts.slice(0,17);
     const rBrow = pts.slice(17,22), lBrow = pts.slice(22,27);
     const nose = pts.slice(27,36);
-    const rEye = pts.slice(36,42);
     const chin = jaw[8];
     const browMidY = (rBrow.concat(lBrow)).reduce((s,p)=>s+p.y,0)/10;
     const browMidX = (rBrow.concat(lBrow)).reduce((s,p)=>s+p.x,0)/10;
@@ -860,34 +887,15 @@ function runFullAnalysis(ctx, canvas, detection){
     cheekPt = { x:(leftCheek.x+rightCheek.x)/2, y:(leftCheek.y+rightCheek.y)/2 };
 
     foreheadPt = { x:browMidX, y: browMidY - (chin.y-browMidY)*0.55 };
-
-    const eyeCenter = (pts)=>{
-      const cx = pts.reduce((s,p)=>s+p.x,0)/pts.length;
-      const cy = pts.reduce((s,p)=>s+p.y,0)/pts.length;
-      return {x:cx,y:cy};
-    };
-    eyePt = eyeCenter(rEye);
-    eyePt.eyeWidth = Math.hypot(rEye[3].x-rEye[0].x, rEye[3].y-rEye[0].y);
   }else{
     cheekPt = { x: box.x+box.width*0.28, y: box.y+box.height*0.55 };
     foreheadPt = { x: box.x+box.width*0.5, y: box.y+box.height*0.18 };
-    eyePt = { x: box.x+box.width*0.32, y: box.y+box.height*0.38, eyeWidth: box.width*0.16 };
   }
 
   const skinRGB = avgPixels(ctx, cheekPt.x, cheekPt.y, sampleR, W, H);
   const highlightRGB = avgPixels(ctx, foreheadPt.x, foreheadPt.y, sampleR, W, H);
   const hairRGB = getRobustHairSample(ctx, box, W, H);
-
-  const eyeR = Math.max(4, Math.round((eyePt.eyeWidth||box.width*0.15)*0.35));
-  const ex = clamp(Math.round(eyePt.x), eyeR, W-eyeR-1);
-  const ey = clamp(Math.round(eyePt.y), eyeR, H-eyeR-1);
-  const eyeData = ctx.getImageData(ex-eyeR, ey-eyeR, eyeR*2, eyeR*2).data;
-  let er=0,eg=0,eb=0,en=0;
-  for(let i=0;i<eyeData.length;i+=4){
-    const br=(eyeData[i]+eyeData[i+1]+eyeData[i+2])/3;
-    if(br>28){ er+=eyeData[i]; eg+=eyeData[i+1]; eb+=eyeData[i+2]; en++; }
-  }
-  const eyeRGB = en>0 ? {r:Math.round(er/en), g:Math.round(eg/en), b:Math.round(eb/en)} : {r:90,g:80,b:70};
+  const eyeRGB = getAccurateEyeColor(ctx, landmarks, box, W, H);
 
   const skinLab = rgbToLab(skinRGB.r, skinRGB.g, skinRGB.b);
   const highlightLab = rgbToLab(highlightRGB.r, highlightRGB.g, highlightRGB.b);
@@ -1101,7 +1109,6 @@ window.copyHex = (hex) => {
   });
 };
 
-// 視窗調整大小時，保持 Canvas 寬高與 CSS 同步，並確保隱藏/清除殘線
 window.addEventListener('resize', () => {
   updateCanvasDimensions();
   const ctx = overlayCanvas.getContext('2d');
